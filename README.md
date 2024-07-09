@@ -1,6 +1,6 @@
 # Proctoring
 
-This project uses TensorFlow, OpenCV, and FER to detect gaze direction, mobile phone usage, and multiple people in a video feed for identifying potential distractions or cheating. It includes face and emotion detection, gaze analysis, and mobile phone identification using a pre-trained TensorFlow model.
+Enhance proctoring system: Improve face detection, gaze tracking with deep learning models (e.g., TensorFlow), integrate robust mobile phone detection, and optimize multi-person detection using OpenCV for real-time monitoring and terminal output.
 
 ## Features
 
