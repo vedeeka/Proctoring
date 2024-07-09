@@ -1,6 +1,6 @@
 # Proctoring
 
-This project is a computer vision-based system designed to detect gaze direction, mobile phone usage, and multiple people in a video feed. It utilizes TensorFlow, OpenCV, and the FER (Facial Emotion Recognition) library to analyze frames from a camera feed and identify potential cheating or distractions.
+This project uses TensorFlow, OpenCV, and FER to detect gaze direction, mobile phone usage, and multiple people in a video feed for identifying potential distractions or cheating. It includes face and emotion detection, gaze analysis, and mobile phone identification using a pre-trained TensorFlow model.
 
 ## Features
 
