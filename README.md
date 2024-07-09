@@ -15,4 +15,9 @@ This project is a computer vision-based system designed to detect gaze direction
 Clone the repository:
 ```bash
 git clone https://github.com/vedeeka/gaze-mobile-detection.git](https://github.com/vedeeka/Proctoring.git)
+pip install -r requirements.txt
+
+curl -O http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz
+tar -xvzf ssd_mobilenet_v2_coco_2018_03_29.tar.gz
+
 python face_detector.py
