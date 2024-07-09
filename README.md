@@ -1,4 +1,4 @@
-# Gaze and Mobile Detection System
+# Proctoring
 
 This project is a computer vision-based system designed to detect gaze direction, mobile phone usage, and multiple people in a video feed. It utilizes TensorFlow, OpenCV, and the FER (Facial Emotion Recognition) library to analyze frames from a camera feed and identify potential cheating or distractions.
 
@@ -14,5 +14,5 @@ This project is a computer vision-based system designed to detect gaze direction
 
 Clone the repository:
 ```bash
-git clone https://github.com/yourusername/gaze-mobile-detection.git
-cd gaze-mobile-detection
+git clone https://github.com/vedeeka/gaze-mobile-detection.git](https://github.com/vedeeka/Proctoring.git)
+python face_detector.py
