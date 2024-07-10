@@ -26,7 +26,7 @@ Run the main script to start monitoring:
 Real-time Proctoring
 
 ```bash
-python face_detector.py
+python realtime_detector.py
 ```
 Video Proctoring
 
