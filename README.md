@@ -1,4 +1,4 @@
-# Proctoring
+# Real Time Proctoring && Video Proctoring
 
 Enhance proctoring system: Improve face detection, gaze tracking with deep learning models (e.g., TensorFlow), integrate robust mobile phone detection, and optimize multi-person detection using OpenCV for real-time monitoring and terminal output.
 
@@ -20,13 +20,18 @@ pip install -r requirements.txt
 curl -O http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz
 tar -xvzf ssd_mobilenet_v2_coco_2018_03_29.tar.gz
 
-python face_detector.py 
 ```
 ## Usage
 Run the main script to start monitoring:
+Real-time Proctoring
 
 ```bash
 python face_detector.py
+```
+Video Proctoring
+
+```bash
+python video_detector.py
 ```
 
 ## License
