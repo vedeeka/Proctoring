@@ -1,6 +1,6 @@
 # Proctoring
 
-This project is a computer vision-based system designed to detect gaze direction, mobile phone usage, and multiple people in a video feed. It utilizes TensorFlow, OpenCV, and the FER (Facial Emotion Recognition) library to analyze frames from a camera feed and identify potential cheating or distractions.
+Enhance proctoring system: Improve face detection, gaze tracking with deep learning models (e.g., TensorFlow), integrate robust mobile phone detection, and optimize multi-person detection using OpenCV for real-time monitoring and terminal output.
 
 ## Features
 
@@ -20,4 +20,14 @@ pip install -r requirements.txt
 curl -O http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz
 tar -xvzf ssd_mobilenet_v2_coco_2018_03_29.tar.gz
 
+python face_detector.py 
+```
+## Usage
+Run the main script to start monitoring:
+
+```bash
 python face_detector.py
+```
+
+## License
+This project is licensed under the MIT License - see the LICENSE file for details.
