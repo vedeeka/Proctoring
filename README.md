@@ -21,6 +21,13 @@ curl -O http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_
 tar -xvzf ssd_mobilenet_v2_coco_2018_03_29.tar.gz
 
 ```
+
+make sure to have  moviepy of version 1.0.3
+or else install it 
+```
+pip install moviepy==1.0.3
+
+```
 ## Usage
 Run the main script to start monitoring:
 Real-time Proctoring
