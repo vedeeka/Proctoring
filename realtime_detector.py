@@ -1,12 +1,17 @@
-import os
+from mtcnn import MTCNN
 import cv2
+import os
 import numpy as np
 import tensorflow as tf
 from fer import FER
+
 # Suppress oneDNN custom operations logs
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TensorFlow log verbosity
+
+# Initialize emotion detector
 emotion_detector = FER()
+
 def load_model(model_path):
     model = tf.saved_model.load(model_path)
     return model
@@ -36,9 +41,9 @@ def detect_mobile(model, frame, detection_threshold=0.05):
 
     return filtered_bboxes, filtered_classes, filtered_scores
 
-def detect_gaze(threshold=0.3,  model_path='ssd_mobilenet_v2_coco_2018_03_29/saved_model'):
-    # Load the pre-trained face detector from OpenCV
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+def detect_gaze(threshold=0.3, model_path='ssd_mobilenet_v2_coco_2018_03_29/saved_model'):
+    # Load the MTCNN face detector
+    mtcnn_detector = MTCNN()
     
     # Load the TensorFlow model
     detection_model = load_model(model_path)
@@ -60,45 +65,46 @@ def detect_gaze(threshold=0.3,  model_path='ssd_mobilenet_v2_coco_2018_03_29/sav
             break
 
         frame_count += 1
-
-        
-
         total_frames += 1
-
-        # Convert the frame to grayscale (face detectors expect grayscale images)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame = cv2.resize(frame, (740, 790))
         
-        # Detect faces in the frame
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        # Detect faces using MTCNN
+        detections = mtcnn_detector.detect_faces(frame)
 
         # Check if there are multiple faces in the frame
-        if len(faces) > 1:
+        if len(detections) > 1:
             multiple_people_frames += 1
             print("Multiple people detected")
 
-        for (x, y, w, h) in faces:
+        for detection in detections:
+            x, y, w, h = detection['box']
+            face_center = (x + w // 2, y + h // 2)
+
             # Draw a rectangle around the face
             cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
-            face_roi = cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
-            face_center = (x + w // 2, y + h // 2)
-            emotion = emotion_detector.detect_emotions(face_roi)
+
+            # Initialize default values for emotion detection
+            dominant_emotion = "Unknown"
+            confidence = 0.0
+
+            # Detect emotions in the face
+            emotion = emotion_detector.detect_emotions(frame[y:y+h, x:x+w])
+            text = "Human Detected"
             if emotion:
                 emotions_dict = emotion[0]['emotions']
                 dominant_emotion, confidence = max(emotions_dict.items(), key=lambda x: x[1])
-                # Further logic based on dominant_emotion and confidence
+                text = f"{text}, {dominant_emotion} ({confidence:.2f})"
             else:
-                # Handle case where emotion detection fails or returns empty
                 print("No emotions detected")
 
-            
+            # Display emotion text above the bounding box
+            cv2.putText(frame, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-            print(f"Dominant Emotion: {dominant_emotion} ({confidence})")
+            # Print dominant emotion and confidence only if detected
+            if confidence > 0:
+                print(f"Dominant Emotion: {dominant_emotion} ({confidence})")
 
-    # Example logic to check for specific emotions
-            if dominant_emotion == 'happy' and confidence > 0.5:
-                print("Person is happy")
-            elif dominant_emotion == 'sad' and confidence > 0.5:
-                print("Person is sad")
+            # Determine and display the gaze direction
             if previous_face_center:
                 if face_center[0] < previous_face_center[0] - w * 0.4:
                     gaze_direction = "Left"
@@ -109,6 +115,9 @@ def detect_gaze(threshold=0.3,  model_path='ssd_mobilenet_v2_coco_2018_03_29/sav
                 else:
                     gaze_direction = "Forward"
                     print("Face forward")
+
+                # Display the gaze direction below the face rectangle
+                cv2.putText(frame, gaze_direction, (x, y + h + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
                 # Count looking away frames
                 if gaze_direction == "Left" or gaze_direction == "Right":
@@ -158,7 +167,7 @@ def detect_gaze(threshold=0.3,  model_path='ssd_mobilenet_v2_coco_2018_03_29/sav
 
     return cheating_gaze, cheating_mobile, multiple_people_detected
 
-
+# Run the detection
 cheating_gaze, cheating_mobile, multiple_people_detected = detect_gaze(model_path='ssd_mobilenet_v2_coco_2018_03_29/saved_model')
 print(f"Cheating detected (gaze): {cheating_gaze}")
 print(f"Cheating detected (mobile): {cheating_mobile}")
