@@ -5,31 +5,31 @@ import numpy as np
 import tensorflow as tf
 from fer import FER
 
-# Suppress oneDNN custom operations logs
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TensorFlow log verbosity
 
-# Initialize emotion detector
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  
+
+
 emotion_detector = FER()
 
 def load_model(model_path):
     model = tf.saved_model.load(model_path)
     return model
 
-def detect_mobile(model, frame, detection_threshold=0.05):
-    # Prepare the input tensor
-    input_tensor = tf.convert_to_tensor(frame)
+def detect_mobile(model, frame_rgb, detection_threshold=0.50):
+  
+    input_tensor = tf.convert_to_tensor(frame_rgb, dtype=tf.uint8)
     input_tensor = input_tensor[tf.newaxis, ...]
 
-    # Perform inference using the specific function or method for detection
+
     detections = model.signatures['serving_default'](input_tensor)
 
-    # Extract bounding boxes, classes, and scores
+    
     bboxes = detections['detection_boxes'][0].numpy()
     classes = detections['detection_classes'][0].numpy().astype(int)
     scores = detections['detection_scores'][0].numpy()
 
-    # Filter detections based on the detection threshold
+
     filtered_bboxes = []
     filtered_classes = []
     filtered_scores = []
@@ -56,94 +56,127 @@ def detect_gaze(threshold=0.3, model_path='ssd_mobilenet_v2_coco_2018_03_29/save
     looking_away_frames = 0
     mobile_detected_frames = 0
     multiple_people_frames = 0
-    frame_count = 0
-    previous_face_center = None
 
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
 
-        frame_count += 1
         total_frames += 1
         frame = cv2.resize(frame, (740, 790))
         
+        # Accuracy Fix: Convert BGR to RGB for Neural Networks
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
         # Detect faces using MTCNN
-        detections = mtcnn_detector.detect_faces(frame)
+        try:
+            detections = mtcnn_detector.detect_faces(rgb_frame)
+        except ValueError:
+            detections = [] # Catch MTCNN empty array bug
 
         # Check if there are multiple faces in the frame
         if len(detections) > 1:
             multiple_people_frames += 1
+            cv2.putText(frame, "WARNING: Multiple People Detected!", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
             print("Multiple people detected")
 
         for detection in detections:
             x, y, w, h = detection['box']
-            face_center = (x + w // 2, y + h // 2)
+            keypoints = detection['keypoints']
+
+            # Keep core coordinates within frame boundaries
+            x, y = max(0, x), max(0, y)
+            if x + w > frame.shape[1]: w = frame.shape[1] - x
+            if y + h > frame.shape[0]: h = frame.shape[0] - y
+            if w <= 0 or h <= 0: continue # Skip invalid boxes
 
             # Draw a rectangle around the face
             cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
 
-            # Initialize default values for emotion detection
+            # --- EMOTION DETECTION FIX ---
+            # The fer library fails if the face is cropped too tightly without background.
+            # We add a 40% margin around the face so its internal detector can "see" the head outlines.
+            pad_x = int(w * 0.4)
+            pad_y = int(h * 0.4)
+            
+            x1 = max(0, x - pad_x)
+            y1 = max(0, y - pad_y)
+            x2 = min(frame.shape[1], x + w + pad_x)
+            y2 = min(frame.shape[0], y + h + pad_y)
+            
+            face_roi = frame[y1:y2, x1:x2]
+            
             dominant_emotion = "Unknown"
             confidence = 0.0
-
-            # Detect emotions in the face
-            emotion = emotion_detector.detect_emotions(frame[y:y+h, x:x+w])
+            
+            # Pass the padded face image to the emotion detector
+            emotion = emotion_detector.detect_emotions(face_roi)
+            
             text = "Human Detected"
             if emotion:
+                # Extract the highest scoring emotion
                 emotions_dict = emotion[0]['emotions']
-                dominant_emotion, confidence = max(emotions_dict.items(), key=lambda x: x[1])
+                dominant_emotion, confidence = max(emotions_dict.items(), key=lambda e: e[1])
                 text = f"{text}, {dominant_emotion} ({confidence:.2f})"
+                print(f"Dominant Emotion: {dominant_emotion} ({confidence:.2f})")
             else:
                 print("No emotions detected")
 
             # Display emotion text above the bounding box
             cv2.putText(frame, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-            # Print dominant emotion and confidence only if detected
-            if confidence > 0:
-                print(f"Dominant Emotion: {dominant_emotion} ({confidence})")
 
-            # Determine and display the gaze direction
-            if previous_face_center:
-                if face_center[0] < previous_face_center[0] - w * 0.4:
-                    gaze_direction = "Left"
-                    print("Face left")
-                elif face_center[0] > previous_face_center[0] + w * 0.4:
-                    gaze_direction = "Right"
-                    print("Face right")
-                else:
-                    gaze_direction = "Forward"
-                    print("Face forward")
+            # --- GAZE DETECTION (Accuracy Fix: Facial Landmarks) ---
+            # Using distances between eyes and nose to calculate accurate 3D head pose angle
+            left_eye = keypoints['left_eye']
+            right_eye = keypoints['right_eye']
+            nose = keypoints['nose']
 
-                # Display the gaze direction below the face rectangle
-                cv2.putText(frame, gaze_direction, (x, y + h + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            dist_left_eye_nose = nose[0] - left_eye[0]
+            dist_right_eye_nose = right_eye[0] - nose[0]
+            
+            # Prevent division by zero
+            if dist_right_eye_nose == 0: dist_right_eye_nose = 0.001 
+            
+            gaze_ratio = dist_left_eye_nose / dist_right_eye_nose
 
-                # Count looking away frames
-                if gaze_direction == "Left" or gaze_direction == "Right":
-                    looking_away_frames += 1
+            if gaze_ratio > 1.6:
+                gaze_direction = "Looking Right"
+                looking_away_frames += 1
+                print("Face right")
+            elif gaze_ratio < 0.6:
+                gaze_direction = "Looking Left"
+                looking_away_frames += 1
+                print("Face left")
+            else:
+                gaze_direction = "Looking Forward"
 
-            previous_face_center = face_center
+            # Display the gaze direction below the face rectangle
+            color = (0, 255, 0) if gaze_direction == "Looking Forward" else (0, 0, 255)
+            cv2.putText(frame, gaze_direction, (x, y + h + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
-        # Detect mobile phones
-        bboxes, classes, scores = detect_mobile(detection_model, frame, detection_threshold=0.05)
+
+        # --- MOBILE PHONE DETECTION ---
+        # Pass the converted RGB frame to the object detection model
+        bboxes, classes, scores = detect_mobile(detection_model, rgb_frame, detection_threshold=0.50)
 
         for bbox, cls, score in zip(bboxes, classes, scores):
-            if cls == 77:  # Assuming class 77 is 'cell phone' in the COCO dataset
+            if cls == 77:  # Class 77 is 'cell phone' in the COCO dataset
                 mobile_detected_frames += 1
                 y_min, x_min, y_max, x_max = bbox
                 start_point = (int(x_min * frame.shape[1]), int(y_min * frame.shape[0]))
                 end_point = (int(x_max * frame.shape[1]), int(y_max * frame.shape[0]))
-                cv2.rectangle(frame, start_point, end_point, (0, 255, 0), 2)
-                cv2.putText(frame, 'Mobile Phone', start_point, cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-                print("Mobile phone detected")
+                
+                cv2.rectangle(frame, start_point, end_point, (0, 0, 255), 3)
+                cv2.putText(frame, f'Mobile Phone {score:.2f}', (start_point[0], start_point[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+                print(f"Mobile phone detected with {score:.2f} confidence")
 
         # For debugging: print progress
-        if total_frames % 10 == 0:
+        if total_frames % 30 == 0:
             print(f"Processed {total_frames} frames...")
 
         # Display the frame
-        cv2.imshow('Gaze Detection', frame)
+        cv2.imshow('Proctoring Gaze & Mobile Detection', frame)
         
         # Break the loop if 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -152,9 +185,9 @@ def detect_gaze(threshold=0.3, model_path='ssd_mobilenet_v2_coco_2018_03_29/save
     cap.release()
     cv2.destroyAllWindows()
 
-    # Calculate the frequency of looking away, mobile detection, and multiple people detection
+    # Calculate frequencies
     if total_frames == 0:
-        return False, False, False  # No frames processed, assume no cheating
+        return False, False, False 
 
     looking_away_frequency = looking_away_frames / total_frames
     mobile_detection_frequency = mobile_detected_frames / total_frames
@@ -168,7 +201,10 @@ def detect_gaze(threshold=0.3, model_path='ssd_mobilenet_v2_coco_2018_03_29/save
     return cheating_gaze, cheating_mobile, multiple_people_detected
 
 # Run the detection
-cheating_gaze, cheating_mobile, multiple_people_detected = detect_gaze(model_path='ssd_mobilenet_v2_coco_2018_03_29/saved_model')
+cheating_gaze, cheating_mobile, multiple_people_detected = detect_gaze(threshold=0.3, model_path='ssd_mobilenet_v2_coco_2018_03_29/saved_model')
+
+print("\n=== PROCTORING RESULTS ===")
 print(f"Cheating detected (gaze): {cheating_gaze}")
 print(f"Cheating detected (mobile): {cheating_mobile}")
 print(f"Multiple people detected: {multiple_people_detected}")
+print("==========================")
